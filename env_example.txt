@@ -1,0 +1,7 @@
+# OpenAI API Key for LLM, STT, and TTS
+OPENAI_API_KEY=your_openai_api_key_here
+
+# LiveKit Cloud credentials
+LIVEKIT_API_KEY=your_livekit_api_key_here
+LIVEKIT_API_SECRET=your_livekit_api_secret_here
+LIVEKIT_URL=wss://your-livekit-url.livekit.cloud 
