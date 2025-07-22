@@ -1,7 +1,8 @@
-# OpenAI API Key for LLM, STT, and TTS
-OPENAI_API_KEY=your_openai_api_key_here
+GEMINI_API_KEY=AIzaSyBPzDfG9raYthzW616e0iTmWDzBklSimeY
+LIVEKIT_API_KEY=APINtxAW9TyWRyn
+LIVEKIT_API_SECRET=yn7iXyjuFc4MeJgBUlHdyrtAKoSsLkIwjxuCxQWzxae
+DEEPGRAM_API_KEY=0e6a958d84d35dd479ab3395223b260f0fb39412
 
-# LiveKit Cloud credentials
-LIVEKIT_API_KEY=your_livekit_api_key_here
-LIVEKIT_API_SECRET=your_livekit_api_secret_here
-LIVEKIT_URL=wss://your-livekit-url.livekit.cloud 
+
+LIVEKIT_HOST=wss://meeting-summarizer-eqgbe5iq.livekit.cloud
+
