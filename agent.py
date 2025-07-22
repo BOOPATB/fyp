@@ -17,6 +17,9 @@ from api import (
     get_booking_summary
 )
 
+
+from dbdriver import MeetingDatabase
+
 load_dotenv()
 
 
@@ -35,6 +38,41 @@ class HotelReceptionistAgent(Agent):
                 get_booking_summary
             ]
         )
+  
+        self.meeting_db = MeetingDatabase()
+
+    # ------ MEETING DATABASE METHODS ------
+    def add_meeting_file(self, filename: str, content: str) -> str:
+        """Add a new meeting file to the meeting database."""
+        success = self.meeting_db.add_file(filename, content)
+        if success:
+            return f"Meeting file '{filename}' added successfully."
+        else:
+            return f"Failed to add meeting file '{filename}' (maybe already exists)."
+
+    def search_meeting_files(self, query: str, top_k: int = 5) -> str:
+        """Semantic vector search in meeting files."""
+        results = self.meeting_db.vector_search(query, top_k)
+        if not results:
+            return "No meeting files found matching your query."
+        response = "Meeting files matching your query:\n\n"
+        for r in results:
+            snippet = r["content"][:200].replace('\n', ' ')
+            response += f"- {r['filename']} (Similarity: {r['similarity']:.3f}, Date: {r['created_at']})\n  {snippet}\n"
+        return response
+
+    def retrieve_meeting_file(self, filename: str) -> str:
+        """Retrieve the full content of a meeting file."""
+        content = self.meeting_db.retrieve_file_content(filename)
+        if content:
+            return content
+        else:
+            return f"No meeting file found with filename '{filename}'."
+
+    def truncate_meeting_files(self) -> str:
+        """Delete all meeting files (admin/debug use)."""
+        self.meeting_db.truncate_files()
+        return "All meeting files have been deleted successfully."
 
 
 async def entrypoint(ctx: agents.JobContext):
@@ -48,9 +86,6 @@ async def entrypoint(ctx: agents.JobContext):
         room=ctx.room,
         agent=HotelReceptionistAgent(),
         room_input_options=RoomInputOptions(
-            # LiveKit Cloud enhanced noise cancellation
-            # - If self-hosting, omit this parameter
-            # - For telephony applications, use `BVCTelephony` for best results
             noise_cancellation=noise_cancellation.BVC(),
         ),
     )
@@ -61,6 +96,5 @@ async def entrypoint(ctx: agents.JobContext):
         instructions="Greet the user warmly as a hotel receptionist and offer to help them with room reservations. Mention that you can help them find the perfect room, check availability, and provide special discounts for special occasions."
     )
 
-
 if __name__ == "__main__":
-    agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint)) 
+    agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint))
