@@ -3,6 +3,9 @@ import pandas as pd
 import logging
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
+from sentence_transformers import SentenceTransformer
+import pickle
+import numpy as np
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

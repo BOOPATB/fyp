@@ -2,19 +2,11 @@ import os
 import datetime
 from dotenv import load_dotenv
 from livekit import agents
-<<<<<<< HEAD
 from livekit.agents import AgentSession, Agent, RoomInputOptions, RoomOutputOptions
 from livekit.plugins import (
-    gemini,
+    google,silero, noise_cancellation,deepgram,speechify)
     # noise_cancellation,  
-=======
-from livekit.agents import (AgentSession, Agent, RoomInputOptions,RoomOutputOptions,function_tool,)
-from livekit import rtc
-from livekit.plugins.google import (
-   LLM
->>>>>>> 924c612ee04151481c1dbd33d4e748d1660e0ce4
-)
-from livekit.plugins import noise_cancellation,deepgram,cartesia
+
 import os
 import datetime
 
@@ -30,15 +22,10 @@ from api import (
     calculate_discount,
     get_booking_summary
 )
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
 from dbdriver import MeetingDatabase
 
-<<<<<<< HEAD
 
-load_dotenv(env_path="CoreLance/.env")
-=======
-load_dotenv("env_example.env")
->>>>>>> 924c612ee04151481c1dbd33d4e748d1660e0ce4
 
 
 class HotelReceptionistAgent(Agent):
@@ -99,26 +86,20 @@ class HotelReceptionistAgent(Agent):
 
 async def entrypoint(ctx: agents.JobContext):
     session = AgentSession(
-<<<<<<< HEAD
-        llm=gemini.LLM(
-              model="gemini-2.5-flash-preview-04-17",
-            api_key=GEMINI_API_KEY,
-        )
-        # Add STT/TTS and noise_cancellation here if you want
-=======
         stt=deepgram.STT(
-            api_key="afbc8893b9e4f291f1f2a24b4aef77524e35047e",
+            api_key=os.getenv("DEEPGRAM_API_KEY"),
             
         ),
-        llm= LLM(
-            model="gemini-2.5-flash-preview-04-17",
-            api_key="AIzaSyBaSOX01gr8YMGIR_6UCtnPH1tCXAqYxfo"
+        llm= google.LLM(
+            model="gemini-2.5-flash",
+            api_key=os.getenv("GOOGLE_API_KEY")
         ),
-        tts=cartesia.TTS(
-            api_key="sk_car_2Gq9PKQuwL7smGS8ZFfi9V",
-            voice="en-US-Wavenet-D"
+        tts=speechify.TTS(
+            api_key=os.getenv("SPEECHIFY_API_KEY"),
+            model="simba-english",
+            voice_id="Jack"
         ),
->>>>>>> 924c612ee04151481c1dbd33d4e748d1660e0ce4
+        vad =silero.VAD.load()
     )
 
     @session.on("user_input_transcribed")
@@ -134,12 +115,7 @@ async def entrypoint(ctx: agents.JobContext):
             # noise_cancellation=noise_cancellation.BVC(),
         ),
         room_output_options=RoomOutputOptions(
-<<<<<<< HEAD
-=======
-            # LiveKit Cloud enhanced noise cancellation
-            # - If self-hosting, omit this parameter
-            # - For telephony applications, use `BVCTelephony` for best results
->>>>>>> 924c612ee04151481c1dbd33d4e748d1660e0ce4
+            
             transcription_enabled=True
         )
     )
