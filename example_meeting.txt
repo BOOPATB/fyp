@@ -1,0 +1,21 @@
+Meeting Date: 2025-07-24
+Attendees: Alice (Project Manager), Bob (Developer), Carol (UX Designer), Dave (QA Lead)
+
+Agenda:
+1. Review current progress on the AI-powered hotel receptionist assistant.
+2. Discuss integration of real-time speech transcription and speaker recognition.
+3. Plan next sprint's tasks and deliverables.
+
+Discussion:
+Alice opened the meeting by praising the completed database schema, emphasizing its robustness for meeting file storage and semantic search capabilities. Bob updated the team on the Speech-to-Text module, currently using Deepgram, and mentioned plans to optimize transcription accuracy with noise cancellation plugins.
+
+Carol shared some UX wireframes demonstrating how the receptionist agent will interact with hotel guests and offer room suggestions based on preferences and special occasions like birthdays or honeymoons.
+
+Dave highlighted the importance of extensive testing, including edge cases for speech recognition errors during noisy inputs. He proposed a testing schedule aligned with the next sprint to ensure stability before deployment.
+
+Action Items:
+- Bob to finalize integration of Cartesia TTS plugin for natural voice responses by August 1.
+- Carol to iterate on UI based on today's feedback.
+- Alice to coordinate with stakeholders for user acceptance testing dates.
+
+The meeting concluded with consensus on timelines and renewed commitment to the project goals.
