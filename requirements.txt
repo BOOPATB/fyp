@@ -1,5 +1,7 @@
-livekit-agents[openai]~=1.0
+livekit-agents[gemini]~=1.0
 livekit-plugins-noise-cancellation~=0.2
 python-dotenv
 pandas
-openpyxl 
+openpyxl
+sentence-transformers
+numpy
