@@ -27,6 +27,9 @@ from dbdriver import MeetingDatabase
 
 
 
+load_dotenv("env_example.env")
+
+
 
 class HotelReceptionistAgent(Agent):
     def __init__(self) -> None:
