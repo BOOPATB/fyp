@@ -4,9 +4,9 @@ from dotenv import load_dotenv
 from livekit import agents
 from livekit.agents import AgentSession, Agent, RoomInputOptions, RoomOutputOptions
 from livekit.plugins import (
-    google,silero, noise_cancellation,deepgram,speechify)
+    google,silero, noise_cancellation,deepgram,elevenlabs)
     # noise_cancellation,  
-
+import random
 import os
 import datetime
 
@@ -27,7 +27,7 @@ from dbdriver import MeetingDatabase
 
 
 
-load_dotenv("env_example.env")
+load_dotenv(dotenv_path="env_example.env")
 
 
 
@@ -97,20 +97,25 @@ async def entrypoint(ctx: agents.JobContext):
             model="gemini-2.5-flash",
             api_key=os.getenv("GOOGLE_API_KEY")
         ),
-        tts=speechify.TTS(
-            api_key=os.getenv("SPEECHIFY_API_KEY"),
-            model="simba-english",
-            voice_id="Jack"
-        ),
+        tts=elevenlabs.TTS(
+            api_key=os.getenv("ELEVENLABS_API_KEY"),
+           voice_id="ODq5zmih8GrVes37Dizd",
+          model="eleven_multilingual_v2"
+   ),
+        
         vad =silero.VAD.load()
     )
-
+    meeting_id = random.randint(100, 999)
     @session.on("user_input_transcribed")
     def on_transcript(transcript):
         if transcript.is_final:
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            with open("user_speech_log.txt", "a") as f:
-                f.write(f"[{timestamp}] {transcript.transcript}\n") 
+            with open(f"user_speech_log_{meeting_id}.txt", "a") as f:
+                f.write(f"[{timestamp}] {transcript.transcript}\n")
+    with open(f"user_speech_log_{meeting_id}.txt", "r") as f:
+       content=f.readlines()
+       session.agent.add_meeting_file(f"user_speech_log_{meeting_id}.txt", "".join(content))
+
     await session.start(
         room=ctx.room,
         agent=HotelReceptionistAgent(),
