@@ -1,9 +1,11 @@
+import os
+import datetime
 from dotenv import load_dotenv
 from livekit import agents
-from livekit.agents import AgentSession, Agent, RoomInputOptions
+from livekit.agents import AgentSession, Agent, RoomInputOptions, RoomOutputOptions
 from livekit.plugins import (
-    openai,
-    noise_cancellation,
+    gemini,
+    # noise_cancellation,
 )
 from prompts import WELCOME_PROMPT, ROOM_TYPES_INFO
 from api import (
@@ -16,11 +18,10 @@ from api import (
     calculate_discount,
     get_booking_summary
 )
-
-
 from dbdriver import MeetingDatabase
 
-load_dotenv()
+load_dotenv(env_path="CoreLance/.env")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 
 class HotelReceptionistAgent(Agent):
@@ -38,10 +39,10 @@ class HotelReceptionistAgent(Agent):
                 get_booking_summary
             ]
         )
-  
         self.meeting_db = MeetingDatabase()
 
-    # ------ MEETING DATABASE METHODS ------
+    # MEETING  METHODS
+
     def add_meeting_file(self, filename: str, content: str) -> str:
         """Add a new meeting file to the meeting database."""
         success = self.meeting_db.add_file(filename, content)
@@ -74,27 +75,81 @@ class HotelReceptionistAgent(Agent):
         self.meeting_db.truncate_files()
         return "All meeting files have been deleted successfully."
 
+    def add_meeting_file_from_pdf(self, pdf_path: str) -> str:
+        """Ingest a PDF file for RAG indexing."""
+        success = self.meeting_db.ingest_pdf_file(pdf_path)
+        if success:
+            return f"PDF meeting file '{os.path.basename(pdf_path)}' ingested successfully."
+        else:
+            return f"Failed to ingest PDF file '{os.path.basename(pdf_path)}'."
+
 
 async def entrypoint(ctx: agents.JobContext):
     session = AgentSession(
-        llm=openai.realtime.RealtimeModel(
-            voice="alloy"
+        llm=gemini.LLM(
+            model="gemini-2.5-flash-preview-04-17",
+            api_key=GEMINI_API_KEY,
         )
+        # Add STT/TTS and noise_cancellation here if you want
     )
 
     await session.start(
         room=ctx.room,
         agent=HotelReceptionistAgent(),
         room_input_options=RoomInputOptions(
-            noise_cancellation=noise_cancellation.BVC(),
+            # noise_cancellation=noise_cancellation.BVC(),
         ),
+        room_output_options=RoomOutputOptions(
+            transcription_enabled=True
+        )
     )
 
     await ctx.connect()
 
     await session.generate_reply(
-        instructions="Greet the user warmly as a hotel receptionist and offer to help them with room reservations. Mention that you can help them find the perfect room, check availability, and provide special discounts for special occasions."
+        instructions=(
+            "Greet the user warmly as a hotel receptionist and offer to help them with room reservations. "
+            "Mention that you can help them find the perfect room, check availability, and provide special discounts for special occasions."
+        )
     )
 
+
+#Test & CLI Utilities :)
+
+def test_add_meeting_file():
+    """
+    Simple helper function to test adding a file to MeetingDatabase from agent.py.
+    """
+    agent = HotelReceptionistAgent()
+
+    test_filename = "example_meeting.txt"
+    test_content = "This is a test meeting transcript about hotel management and AI assistant development."
+
+    print("Adding meeting file...")
+    result = agent.add_meeting_file(test_filename, test_content)
+    print(result)
+
+    print("\nRetrieving the same file content...")
+    retrieved_content = agent.retrieve_meeting_file(test_filename)
+    print(retrieved_content if retrieved_content else "(File content not found)")
+
+
+def ingest_pdf_cli(agent: HotelReceptionistAgent, pdf_path: str):
+    """CLI helper to ingest PDF and print result."""
+    print(f"Ingesting PDF: {pdf_path}")
+    result = agent.add_meeting_file_from_pdf(pdf_path)
+    print(result)
+
+
 if __name__ == "__main__":
-    agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint))
+    import sys
+
+    agent = HotelReceptionistAgent()
+
+    if len(sys.argv) > 2 and sys.argv[1] == "ingest_pdf":
+        path = sys.argv[2]
+        ingest_pdf_cli(agent, path)
+    elif len(sys.argv) > 1 and sys.argv[1] == "test":
+        test_add_meeting_file()
+    else:
+        agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint))
