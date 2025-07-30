@@ -1,4 +1,6 @@
 import sqlite3
+import pdfplumber
+import os
 import pandas as pd
 import logging
 from datetime import datetime
@@ -294,6 +296,7 @@ class HotelDatabase:
         return None 
     
 
+
 class MeetingDatabase:
     def __init__(self, db_path: str = "meeting.db"):
         self.db_path = db_path
@@ -448,4 +451,27 @@ class MeetingDatabase:
                 conn.commit()
             logger.info("All meeting files truncated successfully.")
         except Exception as e:
-            logger.error(f"Error truncating meeting files: {e}") 
+            logger.error(f"Error truncating meeting files: {e}")
+
+    def ingest_pdf_file(self, pdf_path: str) -> bool:
+        """
+        it basically extracts and then joins without any whitespace which is then converted to 
+        """
+        if not os.path.isfile(pdf_path):
+            logger.error(f"PDF file not found: {pdf_path}")
+            return False
+
+        try:
+            with pdfplumber.open(pdf_path) as pdf:
+                pages = [page.extract_text() or "" for page in pdf.pages]
+            full_text = "\n".join(pages).strip()
+            if not full_text:
+                logger.warning(f"No text extracted from PDF: {pdf_path}")
+                return False
+
+            filename = os.path.basename(pdf_path)
+            return self.add_file(filename, full_text)
+
+        except Exception as e:
+            logger.error(f"Error extracting text from PDF '{pdf_path}': {e}")
+            return False
