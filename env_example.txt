@@ -1,8 +1,0 @@
-GEMINI_API_KEY=AIzaSyBPzDfG9raYthzW616e0iTmWDzBklSimeY
-LIVEKIT_API_KEY=APINtxAW9TyWRyn
-LIVEKIT_API_SECRET=yn7iXyjuFc4MeJgBUlHdyrtAKoSsLkIwjxuCxQWzxae
-DEEPGRAM_API_KEY=0e6a958d84d35dd479ab3395223b260f0fb39412
-
-
-LIVEKIT_HOST=wss://meeting-summarizer-eqgbe5iq.livekit.cloud
-
