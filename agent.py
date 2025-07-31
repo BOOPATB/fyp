@@ -2,7 +2,7 @@ import os
 import datetime
 from dotenv import load_dotenv
 from livekit import agents
-from livekit.agents import AgentSession, Agent, RoomInputOptions, RoomOutputOptions
+from livekit.agents import AgentSession, Agent, RoomInputOptions, RoomOutputOptions, function_tool
 from livekit.plugins import (
     google,silero, noise_cancellation,deepgram,elevenlabs)
     # noise_cancellation,  
@@ -10,8 +10,9 @@ import random
 import os
 import datetime
 
+import logging
 import asyncio
-from prompts import WELCOME_PROMPT, ROOM_TYPES_INFO
+from prompts import WELCOME_PROMPT, ROOM_TYPES_INFO, MEETING_PROMPT
 from api import (
     search_available_rooms,
     check_room_availability,
@@ -20,12 +21,15 @@ from api import (
     get_room_details,
     suggest_room_for_occasion,
     calculate_discount,
-    get_booking_summary
+    get_booking_summary,
+    convert_to_pdf,
+    meeting_id
 )
 
 from dbdriver import MeetingDatabase
 
 
+logger=logging.getLogger("agent")
 
 load_dotenv(dotenv_path="env_example.env")
 
@@ -34,7 +38,7 @@ load_dotenv(dotenv_path="env_example.env")
 class HotelReceptionistAgent(Agent):
     def __init__(self) -> None:
         super().__init__(
-            instructions=WELCOME_PROMPT + "\n\n" + ROOM_TYPES_INFO,
+            instructions=WELCOME_PROMPT + "\n\n" + ROOM_TYPES_INFO+ "\n\n" + MEETING_PROMPT,
             tools=[
                 search_available_rooms,
                 check_room_availability,
@@ -44,6 +48,7 @@ class HotelReceptionistAgent(Agent):
                 suggest_room_for_occasion, 
                 calculate_discount,
                 get_booking_summary,
+                convert_to_pdf
             ]
         )
         self.meeting_db = MeetingDatabase()
@@ -83,18 +88,18 @@ class HotelReceptionistAgent(Agent):
         return "All meeting files have been deleted successfully."
 
 
-    
-
+  
 
 
 async def entrypoint(ctx: agents.JobContext):
+    global meeting_id
     session = AgentSession(
         stt=deepgram.STT(
             api_key=os.getenv("DEEPGRAM_API_KEY"),
             
         ),
         llm= google.LLM(
-            model="gemini-2.5-flash",
+            model="gemini-2.0-flash",
             api_key=os.getenv("GOOGLE_API_KEY")
         ),
         tts=elevenlabs.TTS(
@@ -105,16 +110,32 @@ async def entrypoint(ctx: agents.JobContext):
         
         vad =silero.VAD.load()
     )
-    meeting_id = random.randint(100, 999)
+    try:
+        with open(f"user_speech_log_{meeting_id}.txt", "x") as file:
+            pass  # No content is written, creating an empty file
+        print(f"File 'user_speech_log_{meeting_id} .txt' created successfully.")
+    except FileExistsError:
+     print("File 'my_new_file.txt' already exists.")  # Create or clear the log file
     @session.on("user_input_transcribed")
     def on_transcript(transcript):
         if transcript.is_final:
+            logger.info(f"File created for {meeting_id}")
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             with open(f"user_speech_log_{meeting_id}.txt", "a") as f:
                 f.write(f"[{timestamp}] {transcript.transcript}\n")
-    with open(f"user_speech_log_{meeting_id}.txt", "r") as f:
-       content=f.readlines()
-       session.agent.add_meeting_file(f"user_speech_log_{meeting_id}.txt", "".join(content))
+
+    # async def shutdown_callback(self):
+    #     if os.path.exists(f"user_speech_log_{meeting_id}.txt"):
+    #         file = convert_to_pdf(
+    #             input_filename=f"user_speech_log_{meeting_id}.txt",
+    #             output_filename=f"user_speech_log_{meeting_id}.pdf"
+    #         )
+    #         self.add_meeting_file(
+    #             filename=file,
+    #             content=f"Meeting tran."
+    #         )
+
+    # ctx.add_shutdown_callback(shutdown_callback)
 
     await session.start(
         room=ctx.room,
@@ -127,16 +148,14 @@ async def entrypoint(ctx: agents.JobContext):
             transcription_enabled=True
         )
     )
-   
-          
+    
     await ctx.connect(auto_subscribe=True)
-
+    
     await session.generate_reply(
-        instructions="Greet the user warmly as a hotel receptionist and offer to help them with room reservations. "
-                     "Mention that you can help them find the perfect room, check availability, and provide special discounts for special occasions."
+        instructions='''Greet the user warmly as a hotel receptionist and offer to help them with room reservations. 
+                     Mention that you can help them find the perfect room, check availability, and provide special discounts for special occasions.
+                   '''
     )
-
-
 
 def test_add_meeting_file():
     """
@@ -156,7 +175,11 @@ def test_add_meeting_file():
     retrieved_content = agent.retrieve_meeting_file(test_filename)
     print(retrieved_content if retrieved_content else "(File content not found)")
 
-
+def ingest_pdf_cli(agent: HotelReceptionistAgent, pdf_path: str):
+    """CLI helper to ingest PDF and print result."""
+    
+    result = agent.add_meeting_file_from_pdf(pdf_path)
+    print(result)
 if __name__ == "__main__":
     import sys
 

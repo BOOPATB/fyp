@@ -3,14 +3,47 @@ from typing import List, Dict, Optional, Tuple
 from dbdriver import HotelDatabase
 from datetime import datetime, timedelta
 from livekit.agents import function_tool, RunContext
-
+import os 
+from fpdf import FPDF
+import random
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
+meeting_id = random.randint(100, 999)
 # Initialize database
 db = HotelDatabase()
-
+def  ingest_text(pdf_path: str) -> None:
+    from agent import ingest_pdf_cli 
+    ingest_pdf_cli(pdf_path)
+@function_tool
+async def convert_to_pdf() :
+ """Convert a text file to PDF."""
+ pdf = FPDF()
+ 
+ pdf.add_page()
+ 
+ pdf.set_font("Arial", size=12)
+ logger.info(f"Converting user_speech_log_{meeting_id}.txt to PDF")
+ if os.path.exists(f"user_speech_log_{meeting_id}.txt"):
+  try:
+      
+      with open(f"user_speech_log_{meeting_id}.txt", "r") as f:
+          
+          for line in f:
+              
+              pdf.multi_cell(0, 10, txt=line, align='L')
+  
+  
+      pdf.output(f"user_speech_log_{meeting_id}.pdf")
+      ingest_text(os.path.abspath(f"user_speech_log_{meeting_id}.pdf"))
+      logger.info("Successfully converted TXT to PDF.")
+ 
+  except FileNotFoundError:
+      print("Error: The file my_file.txt was not found.")
+  except Exception as e:
+     print(f"An error occurred: {e}")
+  
+ 
 @function_tool()
 async def search_available_rooms(
     context: RunContext,
