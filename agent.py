@@ -1,12 +1,9 @@
 import os
-import datetime
+import re
 from dotenv import load_dotenv
 from livekit import agents
 from livekit.agents import AgentSession, Agent, RoomInputOptions, RoomOutputOptions
-from livekit.plugins import (
-    gemini,
-    # noise_cancellation,
-)
+from livekit.plugins import gemini
 from prompts import WELCOME_PROMPT, ROOM_TYPES_INFO
 from api import (
     search_available_rooms,
@@ -22,7 +19,6 @@ from dbdriver import MeetingDatabase
 
 load_dotenv(env_path="CoreLance/.env")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
 
 class HotelReceptionistAgent(Agent):
     def __init__(self) -> None:
@@ -41,10 +37,55 @@ class HotelReceptionistAgent(Agent):
         )
         self.meeting_db = MeetingDatabase()
 
-    # MEETING  METHODS
+    # RAG-aware conversational handler
+    async def handle_user_message(self, message: str) -> str:
+        text = message.lower().strip()
+
+        # Add PDF as meeting file
+        if re.search(r'\b(add|ingest)\b.*\b(pdf)\b', text):
+            match = re.search(r"(?:path|file(?:name)?|file):\s*([^\s]+\.pdf)", message, re.IGNORECASE)
+            pdf_path = match.group(1) if match else None
+            if not pdf_path:
+                return "Please specify the PDF file path ('file: yourfile.pdf') to ingest."
+            success = self.meeting_db.ingest_pdf_file(pdf_path)
+            return f"PDF '{pdf_path}' ingested for retrieval." if success else f"Failed to ingest '{pdf_path}'. Make sure the file exists."
+
+        # Add plain text meeting file
+        if re.search(r'\badd\b.*\bmeeting file\b', text):
+            match_file = re.search(r"filename\s*[:=]\s*(\S+)", message, re.IGNORECASE)
+            match_content = re.search(r"content\s*[:=]\s*(.+)", message, re.IGNORECASE | re.DOTALL)
+            if not match_file or not match_content:
+                return ("Please specify your 'filename:...' and 'content:...' to add a meeting file.")
+            filename = match_file.group(1)
+            content = match_content.group(1)
+            return self.add_meeting_file(filename, content)
+
+        # Semantic search in meeting files
+        if re.search(r'\b(search|find|lookup|show)\b.*\b(meeting file|meeting|transcript|notes)\b', text):
+            query_match = re.search(r'(?:about|for|on|:)\s*(.*)', text)
+            query = query_match.group(1) if query_match else message
+            return self.search_meeting_files(query)
+
+        # Retrieve content of a specific meeting file
+        if re.search(r'\b(get|show|retrieve|read)\b.*\b(meeting file|transcript|meeting)\b', text):
+            filename_match = re.search(r"filename\s*[:=]\s*(\S+)", message, re.IGNORECASE)
+            if not filename_match:
+                return "Please specify the filename with 'filename:<filename>'."
+            filename = filename_match.group(1)
+            return self.retrieve_meeting_file(filename)
+
+        # Delete all meeting files
+        if re.search(r'\b(delete|remove|truncate|clear)\b.*(meeting files|transcripts|meetings|database)\b', text):
+            return self.truncate_meeting_files()
+
+        # Otherwise, fallback message
+        return (
+            "I'm here to help you with your meeting files! "
+            "You can ask me to add, ingest PDF, search, retrieve, or delete meeting files. "
+            "For example: 'Add meeting file filename:notes.txt content:...'"
+        )
 
     def add_meeting_file(self, filename: str, content: str) -> str:
-        """Add a new meeting file to the meeting database."""
         success = self.meeting_db.add_file(filename, content)
         if success:
             return f"Meeting file '{filename}' added successfully."
@@ -52,7 +93,6 @@ class HotelReceptionistAgent(Agent):
             return f"Failed to add meeting file '{filename}' (maybe already exists)."
 
     def search_meeting_files(self, query: str, top_k: int = 5) -> str:
-        """Semantic vector search in meeting files."""
         results = self.meeting_db.vector_search(query, top_k)
         if not results:
             return "No meeting files found matching your query."
@@ -63,7 +103,6 @@ class HotelReceptionistAgent(Agent):
         return response
 
     def retrieve_meeting_file(self, filename: str) -> str:
-        """Retrieve the full content of a meeting file."""
         content = self.meeting_db.retrieve_file_content(filename)
         if content:
             return content
@@ -71,85 +110,75 @@ class HotelReceptionistAgent(Agent):
             return f"No meeting file found with filename '{filename}'."
 
     def truncate_meeting_files(self) -> str:
-        """Delete all meeting files (admin/debug use)."""
         self.meeting_db.truncate_files()
         return "All meeting files have been deleted successfully."
 
-    def add_meeting_file_from_pdf(self, pdf_path: str) -> str:
-        """Ingest a PDF file for RAG indexing."""
-        success = self.meeting_db.ingest_pdf_file(pdf_path)
-        if success:
-            return f"PDF meeting file '{os.path.basename(pdf_path)}' ingested successfully."
-        else:
-            return f"Failed to ingest PDF file '{os.path.basename(pdf_path)}'."
-
-
 async def entrypoint(ctx: agents.JobContext):
+    agent = HotelReceptionistAgent()
+
     session = AgentSession(
         llm=gemini.LLM(
             model="gemini-2.5-flash-preview-04-17",
             api_key=GEMINI_API_KEY,
         )
-        # Add STT/TTS and noise_cancellation here if you want
     )
+
+    @session.on("user_input_transcribed")
+    async def handle_transcript(event):
+        msg = event.transcript
+        if event.is_final:
+            rag_response = await agent.handle_user_message(msg)
+            await session.send_message(rag_response)
 
     await session.start(
         room=ctx.room,
-        agent=HotelReceptionistAgent(),
-        room_input_options=RoomInputOptions(
-            # noise_cancellation=noise_cancellation.BVC(),
-        ),
-        room_output_options=RoomOutputOptions(
-            transcription_enabled=True
-        )
+        agent=agent,
+        room_input_options=RoomInputOptions(),
+        room_output_options=RoomOutputOptions(transcription_enabled=True)
     )
 
     await ctx.connect()
-
     await session.generate_reply(
         instructions=(
-            "Greet the user warmly as a hotel receptionist and offer to help them with room reservations. "
-            "Mention that you can help them find the perfect room, check availability, and provide special discounts for special occasions."
+            "Greet the user warmly as a hotel receptionist. You can also help with commands like: "
+            "'Add meeting file filename:notes.txt content:...', "
+            "'Search meeting files about project timeline', "
+            "'Ingest PDF file:meeting.pdf', "
+            "'Get meeting file filename:notes.txt', "
+            "or 'Delete all meeting files'."
         )
     )
 
-
-#Test & CLI Utilities :)
-
+# CLI utilities for offline/manual testing
 def test_add_meeting_file():
-    """
-    Simple helper function to test adding a file to MeetingDatabase from agent.py.
-    """
     agent = HotelReceptionistAgent()
-
     test_filename = "example_meeting.txt"
     test_content = "This is a test meeting transcript about hotel management and AI assistant development."
-
     print("Adding meeting file...")
     result = agent.add_meeting_file(test_filename, test_content)
     print(result)
-
     print("\nRetrieving the same file content...")
     retrieved_content = agent.retrieve_meeting_file(test_filename)
     print(retrieved_content if retrieved_content else "(File content not found)")
 
-
 def ingest_pdf_cli(agent: HotelReceptionistAgent, pdf_path: str):
-    """CLI helper to ingest PDF and print result."""
     print(f"Ingesting PDF: {pdf_path}")
-    result = agent.add_meeting_file_from_pdf(pdf_path)
-    print(result)
-
-
+    result = agent.meeting_db.ingest_pdf_file(pdf_path)
+    print(
+        f"PDF '{pdf_path}' ingested for retrieval." if result
+        else f"Failed to ingest '{pdf_path}'. Make sure the file exists."
+    )
+#as the cli thingy isnt needed now for manual testing
+# if __name__ == "__main__":
+#     import sys
+#     agent = HotelReceptionistAgent()
+#     if len(sys.argv) > 2 and sys.argv[1] == "ingest_pdf":
+#         path = sys.argv[2]
+#         ingest_pdf_cli(agent, path)
+#     elif len(sys.argv) > 1 and sys.argv[1] == "test":
+#         test_add_meeting_file()
+#     else:
+#         agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint))
 if __name__ == "__main__":
-    import sys
+    agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint))
 
-    agent = HotelReceptionistAgent()
-
-    if len(sys.argv) > 2 and sys.argv[1] == "ingest_pdf":
-        path = sys.argv[2]
-        ingest_pdf_cli(agent, path)
-    elif len(sys.argv) > 1 and sys.argv[1] == "test":
-        test_add_meeting_file()
-    else:
-        agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint))
