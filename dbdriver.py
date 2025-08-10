@@ -1,10 +1,13 @@
 import sqlite3
-import pdfplumber
-import os
 import pandas as pd
 import logging
-from datetime import datetime
+import pickle
+import numpy as np
+import os
 from typing import List, Dict, Optional, Tuple
+from datetime import datetime
+from sentence_transformers import SentenceTransformer
+import pdfplumber
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -295,7 +298,8 @@ class HotelDatabase:
         
         return None 
     
-
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 class MeetingDatabase:
     def __init__(self, db_path: str = "meeting.db"):
@@ -304,12 +308,9 @@ class MeetingDatabase:
         self.init_database()
 
     def init_database(self):
-        """Initialize the meeting database with table and sample data"""
         logger.info("Initializing meeting database")
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-
-        # Create the meeting_files table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS meeting_files (
                 file_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -319,84 +320,32 @@ class MeetingDatabase:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-
-        # Insert sample meeting transcripts if table is empty
         cursor.execute("SELECT COUNT(*) FROM meeting_files")
         if cursor.fetchone()[0] == 0:
             self._insert_sample_meetings(cursor)
-
         conn.commit()
         conn.close()
         logger.info("Meeting database initialization completed")
 
     def _insert_sample_meetings(self, cursor):
-        """Insert sample meeting transcripts with dummy embeddings"""
         logger.info("Inserting sample meeting transcripts")
-
-        # For sample, we embed content now using the embedding model
         sample_meetings = [
             ("meeting_20250101.txt", "Discussed project timeline and deliverables."),
             ("meeting_20250215.txt", "Reviewed budget and resource allocation for Q2."),
             ("meeting_20250310.txt", "Analyzed customer feedback and upcoming product improvements."),
         ]
-
         for filename, content in sample_meetings:
             embedding = self.embedding_model.encode(content)
             embedding_blob = pickle.dumps(embedding)
-            cursor.execute('''
-                INSERT INTO meeting_files (filename, content, embedding)
-                VALUES (?, ?, ?)
-            ''', (filename, content, embedding_blob))
-
+            cursor.execute(
+                "INSERT INTO meeting_files (filename, content, embedding) VALUES (?, ?, ?)",
+                (filename, content, embedding_blob)
+            )
         logger.info(f"Inserted {len(sample_meetings)} sample meeting transcripts")
 
-    def get_meeting_by_filename(self, filename: str) -> Optional[Dict]:
-        """Retrieve a meeting transcript entry by filename"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT file_id, filename, content, embedding, created_at
-            FROM meeting_files WHERE filename = ?
-        ''', (filename,))
-        row = cursor.fetchone()
-        conn.close()
-
-        if row:
-            return {
-                "file_id": row[0],
-                "filename": row[1],
-                "content": row[2],
-                "embedding": row[3],
-                "created_at": row[4]
-            }
-        return None
-
-    def list_all_meetings(self) -> List[Dict]:
-        """Return all meeting transcript entries"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT file_id, filename, content, created_at
-            FROM meeting_files ORDER BY created_at DESC
-        ''')
-        rows = cursor.fetchall()
-        conn.close()
-
-        meetings = []
-        for row in rows:
-            meetings.append({
-                "file_id": row[0],
-                "filename": row[1],
-                "content": row[2],
-                "created_at": row[3]
-            })
-        return meetings
-
     def add_file(self, filename: str, content: str) -> bool:
-        """Add a meeting transcript file with embedding to database."""
         embedding = self.embedding_model.encode(content)
         embedding_blob = pickle.dumps(embedding)
-
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute(
@@ -413,21 +362,14 @@ class MeetingDatabase:
             return False
 
     def retrieve_file_content(self, filename: str) -> Optional[str]:
-        """Retrieve the full content text of a meeting file by filename."""
         with sqlite3.connect(self.db_path) as conn:
             cur = conn.execute("SELECT content FROM meeting_files WHERE filename = ?", (filename,))
             row = cur.fetchone()
-            if row:
-                return row[0]
-            else:
-                logger.info(f"File '{filename}' not found.")
-                return None
+            return row[0] if row else None
 
     def vector_search(self, query: str, top_k: int = 5) -> List[Dict]:
-        """Perform a vector similarity search on meeting files for the query."""
         query_emb = self.embedding_model.encode(query)
         results = []
-
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute("SELECT filename, content, embedding, created_at FROM meeting_files")
             for filename, content, embedding_blob, created_at in cursor.fetchall():
@@ -439,12 +381,10 @@ class MeetingDatabase:
                     "similarity": similarity,
                     "created_at": created_at
                 })
-
         results.sort(key=lambda x: x["similarity"], reverse=True)
         return results[:top_k]
 
     def truncate_files(self):
-        """Delete all records from meeting_files table."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute("DELETE FROM meeting_files")
@@ -454,13 +394,9 @@ class MeetingDatabase:
             logger.error(f"Error truncating meeting files: {e}")
 
     def ingest_pdf_file(self, pdf_path: str) -> bool:
-        """
-        it basically extracts and then joins without any whitespace which is then converted to 
-        """
         if not os.path.isfile(pdf_path):
             logger.error(f"PDF file not found: {pdf_path}")
             return False
-
         try:
             with pdfplumber.open(pdf_path) as pdf:
                 pages = [page.extract_text() or "" for page in pdf.pages]
@@ -468,10 +404,8 @@ class MeetingDatabase:
             if not full_text:
                 logger.warning(f"No text extracted from PDF: {pdf_path}")
                 return False
-
             filename = os.path.basename(pdf_path)
             return self.add_file(filename, full_text)
-
         except Exception as e:
             logger.error(f"Error extracting text from PDF '{pdf_path}': {e}")
             return False
