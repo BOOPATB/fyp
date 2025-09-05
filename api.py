@@ -12,9 +12,11 @@ logger = logging.getLogger(__name__)
 meeting_id = random.randint(100, 999)
 # Initialize database
 db = HotelDatabase()
+
 def  ingest_text(pdf_path: str) -> None:
     from agent import ingest_pdf_cli 
     ingest_pdf_cli(pdf_path)
+    
 @function_tool
 async def convert_to_pdf() :
  """Convert a text file to PDF."""
