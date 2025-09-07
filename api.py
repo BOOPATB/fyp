@@ -4,14 +4,17 @@ from dbdriver import HotelDatabase
 from datetime import datetime, timedelta
 from livekit.agents import function_tool, RunContext
 import os 
-from fpdf import FPDF
 import random
+from google.genai import Client
+import pdfkit
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 meeting_id = random.randint(100, 999)
 # Initialize database
 db = HotelDatabase()
+# initialize google genai client
+client=Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
 def  ingest_text(pdf_path: str) -> None:
     from agent import ingest_pdf_cli 
@@ -20,32 +23,88 @@ def  ingest_text(pdf_path: str) -> None:
 @function_tool
 async def convert_to_pdf() :
  """Convert a text file to PDF."""
- pdf = FPDF()
- 
- pdf.add_page()
- 
- pdf.set_font("Arial", size=12)
- logger.info(f"Converting user_speech_log_{meeting_id}.txt to PDF")
  if os.path.exists(f"user_speech_log_{meeting_id}.txt"):
-  try:
-      
-      with open(f"user_speech_log_{meeting_id}.txt", "r") as f:
-          
-          for line in f:
-              
-              pdf.multi_cell(0, 10, txt=line, align='L')
-  
-  
-      pdf.output(f"user_speech_log_{meeting_id}.pdf")
-      ingest_text(os.path.abspath(f"user_speech_log_{meeting_id}.pdf"))
+      logger.info(f"Converting user_speech_log_{meeting_id}.txt to PDF")
+      file=client.files.upload(f"user_speech_log_{meeting_id}.txt")
+      logger.info(f"summarizing file:{file}")
+      response= client.models.generate_content(
+      model="gemini-2.0-pro",content=["""You are a professional meeting summarizer. Convert the following file into a concise,
+        structured meeting summary in valid HTML only.
+
+        Required HTML structure and fields:
+        - <h1>Meeting Summary</h1>
+        - Date (Month DD, YYYY)
+        - Time (start – end with timezone if present)
+        - Location
+        - Attendees (ul)
+        - Agenda (ol)
+        - Discussion Points (ul)
+        - Decisions Made (ol)
+        - Action Items (table with columns: Owner | Task | Due Date | Notes)
+        - Next Meeting
+
+        Rules:
+        • Output only HTML — no commentary or extra text.  
+        • If data missing, show "Not provided".  
+        • Dates normalized to "Month DD, YYYY". Times to 12-hour AM/PM.  
+        • Action item missing due date → "TBD".  
+        • Keep bullets one short sentence (8–20 words).  
+        • Make HTML semantic and readable; minimal inline CSS allowed.
+        • Use '&minus;' for dashes in time ranges.
+        • Use 16px for <p> and <li> tags.
+        • Center the <h1> title.
+
+        Example output:
+        <h1 style="text-align: center;">Meeting Summary</h1>
+        <p style="font-size: 16px;"><strong>Date:</strong> July 31, 2025</p>
+        <p style="font-size: 16px;"><strong>Time:</strong> 9:13 PM &minus; 9:13 PM</p>
+        <p style="font-size: 16px;"><strong>Location:</strong> Zoom</p>
+        <h2>Attendees</h2>
+        <ul>
+          <li style="font-size: 16px;">Not provided</li>
+        </ul>
+        <h2>Agenda</h2>
+        <ol>
+          <li style="font-size: 16px;">Not provided</li>
+        </ol>
+        <h2>Discussion Points</h2>
+        <ul>
+          <li style="font-size: 16px;">The meeting opened with brief greetings and was immediately ended after some initial confusion.</li>
+        </ul>
+        <h2>Decisions Made</h2>
+        <ol>
+          <li style="font-size: 16px;">Not provided</li>
+        </ol>
+        <h2>Action Items</h2>
+        <table style="width:100%; border-collapse: collapse;">
+          <thead>
+            <tr style="background-color:#f2f2f2;">
+              <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Owner</th>
+              <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Task</th>
+              <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Due Date</th>
+              <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td colspan="4" style="border: 1px solid #ddd; padding: 8px; font-size: 16px;">No action items were assigned.</td>
+            </tr>
+          </tbody>
+        </table>
+        <h2>Next Meeting</h2>
+        <p style="font-size: 16px;">Not provided</p>
+ 
+        """,file])
+
+      with open(f"user_speech_log_{meeting_id}.html", "w") as f:
+        f.write(response.text)
+      pdfkit.from_file(f"user_speech_log_{meeting_id}.html", f"meeting_{meeting_id}.pdf")
+
+      ingest_text(os.path.abspath(f"meeting_{meeting_id}.pdf"))
       logger.info("Successfully converted TXT to PDF.")
- 
-  except FileNotFoundError:
-      print("Error: The file my_file.txt was not found.")
-  except Exception as e:
-     print(f"An error occurred: {e}")
-  
- 
+ else:
+        logger.error(f"File user_speech_log_{meeting_id}.txt does not exist.")
+
 @function_tool()
 async def search_available_rooms(
     context: RunContext,
