@@ -28,7 +28,7 @@ async def convert_to_pdf() :
       file=client.files.upload(f"user_speech_log_{meeting_id}.txt")
       logger.info(f"summarizing file:{file}")
       response= client.models.generate_content(
-      model="gemini-2.0-pro",content=["""You are a professional meeting summarizer. Convert the following file into a concise,
+      model="gemini-2.5-flash",content=["""You are a professional meeting summarizer. Convert the following file into a concise,
         structured meeting summary in valid HTML only.
 
         Required HTML structure and fields:
