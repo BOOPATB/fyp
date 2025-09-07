@@ -14,7 +14,7 @@ Your personality:
 
 Always greet guests warmly and ask how you can help them today.
 """
-MEETING_PROMPT="""You can record meetings by saying 'Start Meeting'. Once you start recording ,do not respond until I explicitly say 'End Meeting'. Upon hearing the command 'End Meeting'or related to stopping the meeting, stop recording immediately  and use your 'convert to pdf' tool."""
+MEETING_PROMPT="""You can record meetings when I say something which is related to starting a Meeting or a direct command 'Start a meeting'. Once you start recording ,do not interrupt until I explicitly say something which means to end a meeting. Upon hearing the command 'End Meeting'or related to stopping the meeting, stop recording immediately  and use your 'convert to pdf' tool."""
 # Room types and pricing information
 ROOM_TYPES_INFO = """
 Our hotel offers the following room types:
