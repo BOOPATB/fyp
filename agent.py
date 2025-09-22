@@ -145,13 +145,11 @@ async def entrypoint(ctx: agents.JobContext):
             model="gemini-2.0-flash",
             api_key=os.getenv("GOOGLE_API_KEY")
         ),
-        tts=elevenlabs.TTS(
-            api_key=os.getenv("ELEVENLABS_API_KEY"),
-           voice_id="ODq5zmih8GrVes37Dizd",
-          model="eleven_multilingual_v2"
-   ),
-        
-        vad =silero.VAD.load()
+        tts=deepgram.TTS(
+            api_key=os.getenv("DEEPGRAM_API_KEY"),
+        ),
+
+        vad=silero.VAD.load()
     )
     # creating an empty file for the meeting log
     try:
@@ -162,14 +160,14 @@ async def entrypoint(ctx: agents.JobContext):
      print("File 'my_new_file.txt' already exists.")  # Create or clear the log file
      
     @session.on("user_input_transcribed")
-    async def on_transcript(transcript):
+    def on_transcript(transcript):
         if transcript.is_final:
             logger.info(f"File created for {meeting_id}")
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             with open(f"user_speech_log_{meeting_id}.txt", "a") as f:
                 f.write(f"[{timestamp}] {transcript.transcript}\n")
-            rag_response = await HotelReceptionistAgent.handle_user_message(transcript)
-            await session.send_message(rag_response)
+            # rag_response =  HotelReceptionistAgent.handle_user_message(message=transcript)
+            # session.send_message(rag_response)
 
     # async def shutdown_callback(self):
     #     if os.path.exists(f"user_speech_log_{meeting_id}.txt"):

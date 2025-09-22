@@ -6,15 +6,20 @@ from livekit.agents import function_tool, RunContext
 import os 
 import random
 from google.genai import Client
-import pdfkit
+from playwright.async_api import async_playwright
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-meeting_id = random.randint(100, 999)
+meeting_id = random.randint(1, 999)
+
+# Ensure unique meeting_id for each session
+if os.path.exists(f"user_speech_log_{meeting_id}.txt"):
+    meeting_id=random.randint(1, 999)
+
 # Initialize database
 db = HotelDatabase()
 # initialize google genai client
-client=Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
 def  ingest_text(pdf_path: str) -> None:
     from agent import ingest_pdf_cli 
@@ -23,17 +28,19 @@ def  ingest_text(pdf_path: str) -> None:
 @function_tool
 async def convert_to_pdf() :
  """Convert a text file to PDF."""
+ client=Client(api_key=os.getenv("GOOGLE_API_KEY"))
+
  if os.path.exists(f"user_speech_log_{meeting_id}.txt"):
       logger.info(f"Converting user_speech_log_{meeting_id}.txt to PDF")
-      file=client.files.upload(f"user_speech_log_{meeting_id}.txt")
+      file=client.files.upload(file=f"user_speech_log_{meeting_id}.txt")
       logger.info(f"summarizing file:{file}")
       response= client.models.generate_content(
-      model="gemini-2.5-flash",content=["""You are a professional meeting summarizer. Convert the following file into a concise,
+      model="gemini-2.5-flash",contents=["""You are a professional meeting summarizer. Convert the following file into a concise,
         structured meeting summary in valid HTML only.
 
         Required HTML structure and fields:
         - <h1>Meeting Summary</h1>
-        - Date (Month DD, YYYY)
+        - Date (Month DD, YYYY) 
         - Time (start – end with timezone if present)
         - Location
         - Attendees (ul)
@@ -96,14 +103,33 @@ async def convert_to_pdf() :
  
         """,file])
 
+      new_response=response.text.replace('```'," ").replace('html'," ")
       with open(f"user_speech_log_{meeting_id}.html", "w") as f:
-        f.write(response.text)
-      pdfkit.from_file(f"user_speech_log_{meeting_id}.html", f"meeting_{meeting_id}.pdf")
+        f.write(new_response)
+        path_to_file=os.path.abspath(f"user_speech_log_{meeting_id}.html") if os.path.exists(f"user_speech_log_{meeting_id}.html") else None
+      async with async_playwright() as p:
+        # Launch Chromium in headless mode 
+        browser = await p.chromium.launch()
+        page = await browser.new_page()
+        
 
-      ingest_text(os.path.abspath(f"meeting_{meeting_id}.pdf"))
+        # Load the local HTML file
+        await page.goto(f"file:///{path_to_file}")
+
+        # Generate PDF
+        await page.pdf(
+            path=f"meeting_summary_{meeting_id}.pdf",
+            format="A4",
+            margin={"top": "20mm", "bottom": "20mm", "left": "15mm", "right": "15mm"},
+            print_background=False
+        )
+
+        await browser.close()
+
+      ingest_text(pdf_path=os.path.abspath(f"meeting_summary_{meeting_id}.pdf"))
       logger.info("Successfully converted TXT to PDF.")
  else:
-        logger.error(f"File user_speech_log_{meeting_id}.txt does not exist.")
+        logger.error(f"File user_speech_log_{meeting_id}.html does not exist.")
 
 @function_tool()
 async def search_available_rooms(
