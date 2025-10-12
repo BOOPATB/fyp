@@ -1,5 +1,6 @@
 import logging
-from typing import List, Dict, Optional, Tuple
+from typing import Dict
+
 from dbdriver import HotelDatabase
 from datetime import datetime, timedelta
 from livekit.agents import function_tool, RunContext
@@ -7,6 +8,7 @@ import os
 import random
 from google.genai import Client
 from playwright.async_api import async_playwright
+from api2 import pdf_parser
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -16,6 +18,7 @@ meeting_id = random.randint(1, 999)
 # Ensure unique meeting_id for each session
 if os.path.exists(f"user_speech_log_{meeting_id}.txt"):
     meeting_id=random.randint(1, 999)
+    
 
 # Initialize database
 db = HotelDatabase()
@@ -24,18 +27,17 @@ db = HotelDatabase()
 def  ingest_text(pdf_path: str) -> None:
     from agent import ingest_pdf_cli 
     ingest_pdf_cli(pdf_path)
-    
+
+
 @function_tool
 async def convert_to_pdf() :
  """Convert a text file to PDF."""
- client=Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
  if os.path.exists(f"user_speech_log_{meeting_id}.txt"):
       logger.info(f"Converting user_speech_log_{meeting_id}.txt to PDF")
-      file=client.files.upload(file=f"user_speech_log_{meeting_id}.txt")
+      file=f"user_speech_log_{meeting_id}.txt"
       logger.info(f"summarizing file:{file}")
-      response= client.models.generate_content(
-      model="gemini-2.5-flash",contents=["""You are a professional meeting summarizer. Convert the following file into a concise,
+      new_response=pdf_parser(prompt="""You are a professional meeting summarizer. Convert the following file into a concise,
         structured meeting summary in valid HTML only.
 
         Required HTML structure and fields:
@@ -101,9 +103,7 @@ async def convert_to_pdf() :
         <h2>Next Meeting</h2>
         <p style="font-size: 16px;">Not provided</p>
  
-        """,file])
-
-      new_response=response.text.replace('```'," ").replace('html'," ")
+        """,file=file).replace('```'," ").replace('html'," ")
       with open(f"user_speech_log_{meeting_id}.html", "w") as f:
         f.write(new_response)
         path_to_file=os.path.abspath(f"user_speech_log_{meeting_id}.html") if os.path.exists(f"user_speech_log_{meeting_id}.html") else None

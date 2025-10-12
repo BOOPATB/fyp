@@ -1,19 +1,20 @@
 import os
 import datetime
 from dotenv import load_dotenv
-from livekit import agents
-from livekit.agents import AgentSession, Agent, RoomInputOptions, RoomOutputOptions, function_tool
+from livekit import rtc,agents
+from livekit.agents import AgentSession, Agent, RoomInputOptions, RoomOutputOptions
 from livekit.plugins import (
     google,silero, noise_cancellation,deepgram,elevenlabs)
     # noise_cancellation,  
 import random
 import os
 import datetime
-
+from google.genai import Client
 import logging
 import asyncio
 from prompts import WELCOME_PROMPT, ROOM_TYPES_INFO, MEETING_PROMPT
 import re
+import pymupdf
 from api import (
     search_available_rooms,
     check_room_availability,
@@ -24,8 +25,10 @@ from api import (
     calculate_discount,
     get_booking_summary,
     convert_to_pdf,
-    meeting_id
+    meeting_id, 
+    
 )
+from api2 import api
 
 from dbdriver import MeetingDatabase
 
@@ -33,7 +36,6 @@ from dbdriver import MeetingDatabase
 logger=logging.getLogger("agent")
 
 load_dotenv(dotenv_path="env_example.env")
-
 
 
 class HotelReceptionistAgent(Agent):
@@ -53,6 +55,40 @@ class HotelReceptionistAgent(Agent):
             ]
         )
         self.meeting_db = MeetingDatabase()
+    _active_tasks = []
+
+
+
+    async def async_handle_byte_stream(self, reader, participant_identity,):
+        info = reader.info
+        file_bytes=bytes()
+        
+        
+          # Read the stream to a file
+        with open(reader.info["name"], mode="wb") as f:
+           async for chunk in reader:
+               file_bytes += chunk
+               
+           f.write(file_bytes)
+           f.close()
+        api(file=reader.info["name"])
+        doc = pymupdf.open("C:/Users/Dell/Downloads/Balance-Sheet-Example.pdf") # open a document
+        text1= ""
+        for page in doc: # iterate the document pages
+         text = page.get_text() # get plain text encoded
+         text1=text1.join(text)
+        chat_ctx = self.chat_ctx.copy()
+        chat_ctx.add_message(role="user",content=["here is an balance sheet in an text format . Please answer questions asked by the user based on the information in the pdf.",text1])
+        await self.update_chat_ctx(chat_ctx)
+        
+
+    def handle_byte_stream(self, reader, participant_identity):
+        global _active_tasks
+        task = asyncio.create_task(self.async_handle_byte_stream(reader, participant_identity))
+        _active_tasks.append(task)
+        task.add_done_callback(lambda t: _active_tasks.remove(t))
+ 
+    
 
     # RAG-aware conversational handler
     async def handle_user_message(self, message: str) -> str:
@@ -129,6 +165,8 @@ class HotelReceptionistAgent(Agent):
     def truncate_meeting_files(self) -> str:
         self.meeting_db.truncate_files()
         return "All meeting files have been deleted successfully."
+    
+    
 
 
   
@@ -151,6 +189,7 @@ async def entrypoint(ctx: agents.JobContext):
 
         vad=silero.VAD.load()
     )
+    
     # creating an empty file for the meeting log
     try:
         with open(f"user_speech_log_{meeting_id}.txt", "x") as file:
@@ -158,7 +197,8 @@ async def entrypoint(ctx: agents.JobContext):
         print(f"File 'user_speech_log_{meeting_id} .txt' created successfully.")
     except FileExistsError:
      print("File 'my_new_file.txt' already exists.")  # Create or clear the log file
-     
+    
+  
     @session.on("user_input_transcribed")
     def on_transcript(transcript):
         if transcript.is_final:
@@ -169,20 +209,6 @@ async def entrypoint(ctx: agents.JobContext):
             # rag_response =  HotelReceptionistAgent.handle_user_message(message=transcript)
             # session.send_message(rag_response)
 
-    # async def shutdown_callback(self):
-    #     if os.path.exists(f"user_speech_log_{meeting_id}.txt"):
-    #         file = convert_to_pdf(
-    #             input_filename=f"user_speech_log_{meeting_id}.txt",
-    #             output_filename=f"user_speech_log_{meeting_id}.pdf"
-    #         )
-    #         self.add_meeting_file(
-    #             filename=file,
-    #             content=f"Meeting tran."
-    #         )
-
-    # ctx.add_shutdown_callback(shutdown_callback)
-
-            
 
     await session.start(
         room=ctx.room,
@@ -197,7 +223,7 @@ async def entrypoint(ctx: agents.JobContext):
     )
     
     await ctx.connect(auto_subscribe=True)
-    
+    ctx.room.register_byte_stream_handler(topic="pdf_upload", handler=HotelReceptionistAgent().handle_byte_stream)
     await session.generate_reply(
         instructions='''Greet the user warmly as a hotel receptionist and offer to help them with room reservations. 
                      Mention that you can help them find the perfect room, check availability, and provide special discounts for special occasions.
@@ -228,7 +254,7 @@ def ingest_pdf_cli(agent: HotelReceptionistAgent, pdf_path: str):
     print(
         f"PDF '{pdf_path}' ingested for retrieval." if result
         else f"Failed to ingest '{pdf_path}'. Make sure the file exists."
-    )
+    )            
 #as the cli thingy isnt needed now for manual testing
 # if __name__ == "__main__":
 #     import sys
