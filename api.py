@@ -24,9 +24,9 @@ if os.path.exists(f"user_speech_log_{meeting_id}.txt"):
 db = HotelDatabase()
 # initialize google genai client
 
-def  ingest_text(pdf_path: str) -> None:
+def  ingest_text(file: str) -> None:
     from agent import ingest_pdf_cli 
-    ingest_pdf_cli(pdf_path)
+    ingest_pdf_cli(pdf_path=file)
 
 
 @function_tool
@@ -50,7 +50,7 @@ async def convert_to_pdf() :
         - Discussion Points (ul)
         - Decisions Made (ol)
         - Action Items (table with columns: Owner | Task | Due Date | Notes)
-        - Next Meeting
+        - Next Meeting  
 
         Rules:
         • Output only HTML — no commentary or extra text.  
@@ -126,7 +126,7 @@ async def convert_to_pdf() :
 
         await browser.close()
 
-      ingest_text(pdf_path=os.path.abspath(f"meeting_summary_{meeting_id}.pdf"))
+      ingest_text(file=os.path.abspath(f"meeting_summary_{meeting_id}.pdf"))
       logger.info("Successfully converted TXT to PDF.")
  else:
         logger.error(f"File user_speech_log_{meeting_id}.html does not exist.")
