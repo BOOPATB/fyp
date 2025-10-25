@@ -30,34 +30,11 @@ def api(file: Optional[str]):
    @app.post("/charts/pie")
    async def create_pie_chart():
        # Logic to create a chart
-       chart=pdf_parser(prompt="""From the following balance sheet or financial report, extract the major asset components (both current and non-current) along with their values. Output the result in JSON format compatible with Chart.js for a pie chart. Group similar subcategories under major asset categories if needed. Format the output with 'labels' and 'data' as arrays. Do not include liabilities or equity values.
+       chart=pdf_parser(prompt="""From the following balance sheet or financial report, extract the major asset components (both current and non-current) along with their values. Output the result in JSON format   for a pie chart. Group similar subcategories under major asset categories if needed. Format the output with 'labels' and 'data' as arrays. Do not include liabilities or equity values.
    
-   Example Output Format for Chart.js (Pie Chart)
-   {
-     "type": "pie",
-     "data": {
-       "labels": [
-         "Cash & Cash Equivalents",
-         "Accounts Receivable",
-         "Inventory",
-         "Property, Plant & Equipment",
-         "Intangible Assets"
-       ],
-       "datasets": [
-         {
-           "label": "Asset Breakdown",
-           "data": [150000, 85000, 60000, 220000, 40000],
-           "backgroundColor": [
-             "#36A2EB",
-             "#FF6384",
-             "#FFCE56",
-             "#4BC0C0",
-             "#9966FF"
-           ]
-         }
-       ]
-     }
-   }""",file=file)
+   Example Output Format  (Pie Chart)
+   [{"name":"Cash & Cash Equivalents","value":150000},{"name":"Accounts Receivable","value":85000},{"name":"Inventory","value":60000},{"name":"Property, Plant & Equipment","value":220000},{"name":"Intangible Assets","value":40000}]
+   """,file=file)
        chart=chart.replace("```"," ").replace("json"," ")
        chart=json.loads(chart)
        
@@ -65,60 +42,15 @@ def api(file: Optional[str]):
    @app.post("/charts/bar")
    async def create_bar_chart():
        # Logic to create a chart
-       chart=pdf_parser(prompt="""From the following balance sheet or financial report, extract the total values of Assets and Liabilities for each reporting period (e.g., yearly or quarterly).
-Include both current and non-current components in their respective totals.
+       chart=pdf_parser(prompt="""From the following balance sheet or financial report, extract the values of  Liabilities .
+Include both current and non-current components in their totals.
 Do not include equity values.
 
-Output the result in JSON format compatible with Chart.js for a bar chart that compares total assets vs total liabilities over time.
+Output the result in JSON format   for a bar chart that shows values of each category of liabilities .
 
-If multiple years or periods exist, show them in "labels"; otherwise, show a single-period comparison.
 
 ✅ Example Output Format
-{
-  "type": "bar",
-  "data": {
-    "labels": ["2021", "2022", "2023", "2024", "2025"],
-    "datasets": [
-      {
-        "label": "Total Assets",
-        "data": [520000, 560000, 590000, 625000, 660000],
-        "backgroundColor": "#36A2EB"
-      },
-      {
-        "label": "Total Liabilities",
-        "data": [310000, 330000, 350000, 370000, 390000],
-        "backgroundColor": "#FF6384"
-      }
-    ]
-  },
-  "options": {
-    "responsive": true,
-    "plugins": {
-      "title": {
-        "display": true,
-        "text": "Assets vs Liabilities Over Time"
-      },
-      "legend": {
-        "position": "top"
-      }
-    },
-    "scales": {
-      "y": {
-        "beginAtZero": true,
-        "title": {
-          "display": true,
-          "text": "Amount (in USD)"
-        }
-      },
-      "x": {
-        "title": {
-          "display": true,
-          "text": "Fiscal Year"
-        }
-      }
-    }
-  }
-}""",file=file)
+ [{"name":"Total non-current liabilities","value":150000},{"name":"Accounts Payable","value":85000},{"name":"Short-term Debt","value":60000},{"name":"Long-term Debt","value":220000},{"name":"Deferred Tax Liabilities","value":40000}]""",file=file)
        chart=chart.replace("```"," ").replace("json"," ")
        chart=json.loads(chart)
    
@@ -128,32 +60,17 @@ If multiple years or periods exist, show them in "labels"; otherwise, show a sin
        # Logic to create a chart
        chart=pdf_parser(prompt="""From the following balance sheet or financial report, extract the total shareholders’ equity values over multiple years or reporting periods. Include all components contributing to total equity (e.g., share capital, retained earnings, reserves, accumulated other comprehensive income) summed under total equity for each year.
 
-Output the result in JSON format compatible with Chart.js for a line chart, showing the evolution of total shareholders’ equity over time.
+Output the result in JSON format   for a line chart, showing the evolution of total shareholders’ equity over time.
 
 Use the following structure:
 
-{
-  "type": "line",
-  "data": {
-    "labels": ["2021", "2022", "2023", "2024", "2025"],
-    "datasets": [
-      {
-        "label": "Total Shareholders' Equity",
-        "data": [350000, 370000, 395000, 420000, 440000],
-        "borderColor": "#36A2EB",
-        "backgroundColor": "rgba(54,162,235,0.2)",
-        "fill": true,
-        "tension": 0.4,
-        "pointRadius": 5,
-        "pointBackgroundColor": "#36A2EB"
-      }
-    ]
-  }
-}
+[{"name":2024,"data":350000},{"name":2025,"data":370000},{"name":2026,"data":395000},{"name":2027,"data":420000},{"name":2028,"data":440000}]
 """,file=file)
        chart=chart.replace("```"," ").replace("json"," ")
        chart=json.loads(chart)
-   
-       return chart  
-     
-   uvicorn.run(app, host="127.0.0.1", port=3000)
+ 
+       return chart
+
+   uvicorn.run(app, host="127.0.0.1", port=8000)
+if __name__ == "__main__":
+       api(file="C:/Users/Dell/OneDrive/Downloads/Balance-Sheet-Example.pdf")
