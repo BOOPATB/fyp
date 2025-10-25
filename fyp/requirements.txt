@@ -1,0 +1,16 @@
+livekit-agents[google]
+livekit-agents[deepgram]
+livekit-agents[silero]
+livekit-agents[elevenlabs]
+
+
+livekit-plugins-noise-cancellation
+python-dotenv
+pandas
+openpyxl
+sentence-transformers
+numpy
+playwright
+PyMuPDF
+fastapi
+uvicorn[standard]
