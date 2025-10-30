@@ -6,6 +6,7 @@ from google.genai import Client
 import json
 import uvicorn
 import dotenv
+import re
 dotenv.load_dotenv("env_example.env")
 def pdf_parser(prompt: str,file: Optional[str])-> str:
     client=Client(api_key=os.getenv("GOOGLE_API_KEY"))
@@ -17,60 +18,139 @@ def api(file: Optional[str]):
    app=FastAPI()
    origins = [
      
-       "http://localhost:8080",
+       "http://localhost:3000",
    ]
    
    app.add_middleware(
        CORSMiddleware,
-       allow_origins=['*'],
+       allow_origins=origins,
        allow_credentials=True,
        allow_methods=["*"],
        allow_headers=["*"],
    )
-   @app.post("/charts/pie")
+   line_chart =  pdf_parser(prompt="""From the provided balance sheet or financial report, extract the total shareholders’ equity (also known as total equity, stockholders’ equity, or owners’ equity) for each available year or reporting period.
+
+Instructions:
+-Identify all components that contribute to total shareholders’ equity — such as:
+-Share capital / common stock / paid-in capital
+-Retained earnings
+-Reserves
+
+Non-controlling interest (if included in total equity line)
+Use the "Total Equity" or "Total Shareholders’ Equity" line item as the final summed figure for each period.
+If multiple years or periods are present, extract the total equity value for each.
+If more than four years are available, select the four years with the highest total equity values.
+Format the extracted data in a consistent list of objects suitable for a line chart:
+
+[
+  {"x": 2021, "y": 320000},
+  {"x": 2022, "y": 345000},
+  {"x": 2023, "y": 370000},
+  {"x": 2024, "y": 395000}
+]
+
+Ensure:
+Each x represents the fiscal year (as a number, e.g., 2024).
+Each y represents the total shareholders’ equity for that year (as a numeric value).
+
+Output only the  list — no commentary or explanation.""",file=file).replace("```"," ").replace("json"," ")
+   bar_chart= pdf_parser(prompt="""From the following balance sheet or financial report, extract only the numeric values of Liabilities, including both current and non-current components.
+
+Extraction Rules:
+
+Identify all relevant liability line items, such as (but not limited to):
+-Deferred Tax Liabilities
+-Other Non-current Liabilities
+-Total Current Liabilities
+-Total Non-current Liabilities
+
+
+From all available categories, choose only 4 of the most important or significant liability categories, typically those with the largest values or most impact.
+Do not include any equity values (e.g., share capital, retained earnings, total equity).
+Ensure that both current and non-current liabilities are represented within the selected categories.
+Present all extracted data in a consistent JSON list format, suitable for visualization in a bar chart.
+
+✅ Output Format:
+Return only the JSON list (no commentary, no extra text).
+
+Example:
+
+[
+  {"x": "Total Non-current Liabilities", "y": 150000},
+  {"x": "Accounts Payable", "y": 85000},
+  {"x": "Short-term Debt", "y": 60000},
+  {"x": "Long-term Debt", "y": 220000}
+]
+
+Output Requirements:
+
+Each object must include:
+"x" → liability category name (string)
+"y" → numeric value (integer or float)
+All numeric values must be extracted directly from the financial report (no estimated or calculated values).
+
+Output should always maintain the same structured format for repeated extractions.""",file=file).replace("```"," ").replace("json"," ")
+   pie_chart= pdf_parser(prompt="""From the following balance sheet or financial report, extract the major asset components and their corresponding values.
+
+Extraction Rules:
+
+Include both current and non-current assets.
+Identify and group similar subcategories under major asset headings if necessary.
+
+Example grouping:
+
+Combine “Cash,” “Bank Balances,” and “Short-term Investments” into “Cash & Cash Equivalents.”
+Combine “Machinery,” “Buildings,” and “Land” into “Property, Plant & Equipment (PPE).”
+Focus only on asset categories, not liabilities or equity.
+Choose only the 4 most important (highest value or most significant) asset categories.
+
+
+
+✅ Output Format:
+Return only the JSON list — no commentary, no explanations.
+Format for pie chart visualization as follows:
+
+[
+  {"x": "Cash & Cash Equivalents", "y": 150000},
+  {"x": "Accounts Receivable", "y": 85000},
+  {"x": "Inventory", "y": 60000},
+  {"x": "Property, Plant & Equipment", "y": 220000}
+]
+
+Output Requirements:
+
+"x" → Asset category name (string)
+"y" → Numeric value (integer or float)
+Only assets — exclude liabilities, equity, and totals unrelated to assets.
+
+Maintain consistent structure across multiple executions to ensure data comparability.
+   """,file=file).replace("```"," ").replace("json"," ")
+   @app.get("/charts/pie")
    async def create_pie_chart():
        # Logic to create a chart
-       chart=pdf_parser(prompt="""From the following balance sheet or financial report, extract the major asset components (both current and non-current) along with their values. Output the result in JSON format   for a pie chart. Group similar subcategories under major asset categories if needed. Format the output with 'labels' and 'data' as arrays. Do not include liabilities or equity values.
+       chart= pie_chart
+       cleaned = re.sub(r'\s+', '', chart)
+       proper_json = json.loads(cleaned)
+       return {"chart": proper_json}
    
-   Example Output Format  (Pie Chart)
-   [{"name":"Cash & Cash Equivalents","value":150000},{"name":"Accounts Receivable","value":85000},{"name":"Inventory","value":60000},{"name":"Property, Plant & Equipment","value":220000},{"name":"Intangible Assets","value":40000}]
-   """,file=file)
-       chart=chart.replace("```"," ").replace("json"," ")
-       chart=json.loads(chart)
-       
-       return chart
-   @app.post("/charts/bar")
+   @app.get("/charts/bar")
    async def create_bar_chart():
        # Logic to create a chart
-       chart=pdf_parser(prompt="""From the following balance sheet or financial report, extract the values of  Liabilities .
-Include both current and non-current components in their totals.
-Do not include equity values.
+       chart= bar_chart  
+       cleaned = re.sub(r'\s+', '', chart)
+       proper_json = json.loads(cleaned)
 
-Output the result in JSON format   for a bar chart that shows values of each category of liabilities .
+       return {"chart": proper_json}
 
-
-✅ Example Output Format
- [{"name":"Total non-current liabilities","value":150000},{"name":"Accounts Payable","value":85000},{"name":"Short-term Debt","value":60000},{"name":"Long-term Debt","value":220000},{"name":"Deferred Tax Liabilities","value":40000}]""",file=file)
-       chart=chart.replace("```"," ").replace("json"," ")
-       chart=json.loads(chart)
-   
-       return chart  
-   @app.post("/charts/line")
+   @app.get("/charts/line")
    async def create_line_chart():
        # Logic to create a chart
-       chart=pdf_parser(prompt="""From the following balance sheet or financial report, extract the total shareholders’ equity values over multiple years or reporting periods. Include all components contributing to total equity (e.g., share capital, retained earnings, reserves, accumulated other comprehensive income) summed under total equity for each year.
+       chart= line_chart
+       cleaned = re.sub(r'\s+', '', chart)
+       proper_json = json.loads(cleaned)
 
-Output the result in JSON format   for a line chart, showing the evolution of total shareholders’ equity over time.
-
-Use the following structure:
-
-[{"name":2024,"data":350000},{"name":2025,"data":370000},{"name":2026,"data":395000},{"name":2027,"data":420000},{"name":2028,"data":440000}]
-""",file=file)
-       chart=chart.replace("```"," ").replace("json"," ")
-       chart=json.loads(chart)
- 
-       return chart
+       return {"chart": proper_json}
 
    uvicorn.run(app, host="127.0.0.1", port=8000)
 if __name__ == "__main__":
-       api(file="C:/Users/Dell/OneDrive/Downloads/Balance-Sheet-Example.pdf")
+       api(file="C:/Users/Dell/Downloads/FY24_Q1_Consolidated_Financial_Statements.pdf")
