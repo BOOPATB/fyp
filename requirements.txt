@@ -1,5 +1,10 @@
-livekit-agents[gemini]~=1.0
-livekit-plugins-noise-cancellation~=0.2
+livekit-agents[google]
+livekit-agents[deepgram]
+livekit-agents[silero]
+livekit-agents[elevenlabs]
+
+
+livekit-plugins-noise-cancellation
 python-dotenv
 pandas
 openpyxl

@@ -14,41 +14,42 @@ Your personality:
 
 Always greet guests warmly and ask how you can help them today.
 """
-
+MEETING_PROMPT="""You can record meetings when I say something which is related to starting a Meeting or a direct command 'Start a meeting'. Once you start recording ,do not interrupt until I explicitly say something which means to end a meeting. Upon hearing the command 'End Meeting'or related to stopping the meeting, stop recording immediately  and use your 'convert_to_pdf' tool."""
 # Room types and pricing information
+
 ROOM_TYPES_INFO = """
 Our hotel offers the following room types:
 
-1. **Normal Room** - $50-$80 per night
+1.  Normal Room  - $50-$80 per night
    - Perfect for solo travelers or business trips
    - Basic amenities included
 
-2. **Couple Room** - $80-$120 per night
+2.  Couple Room  - $80-$120 per night
    - Ideal for couples
    - Comfortable double bed
 
-3. **2 Beds Room** - $100-$150 per night
+3.  2 Beds Room  - $100-$150 per night
    - Two separate beds
    - Great for friends or family
 
-4. **4 Beds Room** - $150-$200 per night
+4.  4 Beds Room  - $150-$200 per night
    - Four separate beds
    - Perfect for groups
 
-5. **Queen Size Room** - $120-$180 per night
+5.  Queen Size Room  - $120-$180 per night
    - Luxurious queen bed
    - Enhanced amenities
 
-6. **Honeymoon Suite** - $200-$300 per night
+6.  Honeymoon Suite  - $200-$300 per night
    - Romantic atmosphere
    - Special amenities for couples
    - 15% discount for honeymoon bookings
 
-7. **Deluxe Suite** - $250-$400 per night
+7.  Deluxe Suite  - $250-$400 per night
    - Premium accommodations
    - Extra space and luxury features
 
-8. **Luxury Suite** - $350-$600 per night
+8.  Luxury Suite  - $350-$600 per night
    - Ultimate luxury experience
    - Best amenities and service
 
@@ -183,3 +184,4 @@ How romantic! A {occasion} is such a special time. Our {room_type} is perfect fo
 
 I can arrange any of these special touches for your stay. Would you like me to proceed with the booking?
 """ 
+REMOVE_START_PROMPT="""Do not speak star when speaking about the information about rooms or booking."""
